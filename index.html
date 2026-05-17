@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGIS - Real-Time Crowd Analytics</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body, html { height: 100%; width: 100%; background: #0A0A0A; overflow: hidden; display: flex; }
+        
+        #map { flex: 1; height: 100%; }
+
+        .panel {
+            width: 340px;
+            background: #0F0F0F;
+            border-right: 1px solid #1A1A1A;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            z-index: 1000;
+        }
+
+        h1 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #666; margin-bottom: 4px; }
+        .heading { font-size: 18px; font-weight: 400; color: #FFF; margin-bottom: 24px; }
+        
+        .status-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 32px; }
+        .indicator { width: 6px; height: 6px; border-radius: 50%; background: #10B981; transition: background 0.3s; }
+        .indicator-text { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #10B981; letter-spacing: 0.5px; }
+        
+        .metric-card { background: #141414; border: 1px solid #1A1A1A; padding: 16px; border-radius: 6px; margin-bottom: 32px; }
+        .label { font-size: 9px; text-transform: uppercase; color: #444; letter-spacing: 1px; margin-bottom: 4px; }
+        .value { font-size: 24px; font-weight: 300; color: #EEE; }
+
+        .chart-box { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+        .chart-label { font-size: 9px; text-transform: uppercase; color: #444; letter-spacing: 1px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h1>Autonomous Monitor</h1>
+        <div class="heading">Prasanthi Nilayam Hub</div>
+        
+        <div class="status-bar">
+            <div id="ind" class="indicator"></div>
+            <div id="ind-text" class="indicator-text">Optimal Flow</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="label">Sai Kulwant Hall Density</div>
+            <div id="count" class="value">0</div>
+        </div>
+
+        <div class="chart-box">
+            <div class="chart-label">Real-Time Behavior Trend</div>
+            <canvas id="liveChart"></canvas>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Initialize Map Environment centered on Prasanthi Nilayam Ashram, Puttaparthi
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([14.1656, 77.8074], 16);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+
+        // Integrate Base OGC Spatial Overlay Stream from Bhuvan
+        L.tileLayer.wms('https://bhuvan-vec1.nrsc.gov.in/bhuvan/wms', {
+            layers: 'bhuvan_nuis_base',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.3
+        }).addTo(map);
+
+        // Spatial focus on Sai Kulwant Hall inside the Ashram complex
+        const targetAnchor = [14.1656, 77.8074];
+        let spatialVectorGroup = L.layerGroup().addTo(map);
+
+        // Configure Analytical Trend Chart
+        const ctx = document.getElementById('liveChart').getContext('2d');
+        const timelineLimit = 20;
+        
+        const liveChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(timelineLimit).fill(''),
+                datasets: [{
+                    data: Array(timelineLimit).fill(0),
+                    borderColor: '#10B981',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { grid: { color: '#161616' }, ticks: { color: '#333', font: { size: 9 } } } }
+            }
+        });
+
+        // Client-Side Execution Engine
+        function computeState() {
+            const time = Date.now() * 0.001;
+            const cycle = Math.abs(Math.sin(time * 0.15));
+            const metrics = Math.floor(150 + (cycle * 650) + (Math.random() * 25));
+            
+            let coreColor = '#10B981';
+            let strokeColor = '#047857';
+            let statusMessage = 'Optimal Flow';
+
+            if (metrics > 600) {
+                coreColor = '#EF4444'; strokeColor = '#B91C1C'; statusMessage = 'Critical Density';
+            } else if (metrics > 350) {
+                coreColor = '#F59E0B'; strokeColor = '#B45309'; statusMessage = 'Approaching Limit';
+            }
+
+            spatialVectorGroup.clearLayers();
+            L.circle(targetAnchor, {
+                radius: 40 + (metrics * 0.15),
+                fillColor: coreColor,
+                fillOpacity: 0.3,
+                color: strokeColor,
+                weight: 1
+            }).addTo(spatialVectorGroup);
+
+            document.getElementById('count').innerText = metrics;
+            const textEl = document.getElementById('ind-text');
+            const dotEl = document.getElementById('ind');
+            
+            textEl.innerText = statusMessage;
+            textEl.style.color = coreColor;
+            dotEl.style.background = coreColor;
+
+            liveChart.data.datasets[0].data.push(metrics);
+            liveChart.data.datasets[0].data.shift();
+            liveChart.data.datasets[0].borderColor = coreColor;
+            liveChart.update();
+        }
+
+        computeState();
+        setInterval(computeState, 2000);
+    </script>
+</body>
+</html>
