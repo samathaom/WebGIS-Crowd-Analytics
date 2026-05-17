@@ -1,9 +1,10 @@
+                currentDisplayCount += delta * 0.05;
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGIS - Real-Time Crowd Analytics</title>
+    <title>WebGIS - Structural Spatial Analytics</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -32,15 +33,28 @@
         .label { font-size: 9px; text-transform: uppercase; color: #71717A; letter-spacing: 1px; margin-bottom: 4px; }
         .value { font-size: 24px; font-weight: 300; color: #18181B; font-variant-numeric: tabular-nums; }
 
-        .chart-box { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+        .chart-box { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            min-height: 0; /* Prevents flex items from overflowing their container */
+        }
         .chart-label { font-size: 9px; text-transform: uppercase; color: #71717A; letter-spacing: 1px; margin-bottom: 12px; }
+        
+        .chart-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            min-height: 0;
+            padding-bottom: 8px; /* Safe padding context to clear bottom cutoff */
+        }
     </style>
 </head>
 <body>
 
     <div class="panel">
         <h1>Autonomous Monitor</h1>
-        <div class="heading">Hill View Stadium Hub</div>
+        <div id="ui-title" class="heading">Spatial Hub</div>
         
         <div class="status-bar">
             <div id="ind" class="indicator"></div>
@@ -48,13 +62,15 @@
         </div>
 
         <div class="metric-card">
-            <div class="label">Open Field Core Density</div>
+            <div id="ui-label" class="label">Zone Density Vector</div>
             <div id="count" class="value">0</div>
         </div>
 
         <div class="chart-box">
             <div class="chart-label">Fluid Density Trend</div>
-            <canvas id="liveChart"></canvas>
+            <div class="chart-container">
+                <canvas id="liveChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -64,8 +80,20 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        // Set coordinates to Sri Sathya Sai Hill View Stadium, Puttaparthi
-        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([14.1622, 77.8139], 16);
+        const SPATIAL_CONFIG = {
+            locationName: "Hill View Stadium Hub",
+            metricLabel: "Open Field Core Density",
+            coordinates: [14.1622, 77.8139],
+            zoomLevel: 16,
+            minSimulatedCount: 5,
+            maxSimulatedCount: 25,
+            chartMaxYAxis: 100
+        };
+
+        document.getElementById('ui-title').innerText = SPATIAL_CONFIG.locationName;
+        document.getElementById('ui-label').innerText = SPATIAL_CONFIG.metricLabel;
+
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView(SPATIAL_CONFIG.coordinates, SPATIAL_CONFIG.zoomLevel);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
         L.tileLayer.wms('https://bhuvan-vec1.nrsc.gov.in/bhuvan/wms', {
@@ -75,12 +103,10 @@
             opacity: 0.5
         }).addTo(map);
 
-        const targetAnchor = [14.1622, 77.8139];
         let spatialVectorGroup = L.layerGroup().addTo(map);
 
-        // Lower baseline trackers to represent a sparsely populated zone
-        let currentDisplayCount = 12;
-        let targetCount = 12;
+        let currentDisplayCount = SPATIAL_CONFIG.minSimulatedCount;
+        let targetCount = SPATIAL_CONFIG.minSimulatedCount;
 
         const ctx = document.getElementById('liveChart').getContext('2d');
         const timelineLimit = 25;
@@ -90,7 +116,7 @@
             data: {
                 labels: Array(timelineLimit).fill(''),
                 datasets: [{
-                    data: Array(timelineLimit).fill(12),
+                    data: Array(timelineLimit).fill(SPATIAL_CONFIG.minSimulatedCount),
                     borderColor: '#10B981',
                     borderWidth: 1.5,
                     pointRadius: 0,
@@ -101,18 +127,28 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        bottom: 4 // Internal canvas layout preservation spacing
+                    }
+                },
                 animation: { duration: 0 },
                 plugins: { legend: { display: false } },
                 scales: { 
                     x: { display: false }, 
-                    y: { min: 0, max: 100, grid: { color: '#F4F4F5' }, ticks: { color: '#A1A1AA', font: { size: 9 } } } 
+                    y: { 
+                        min: 0, 
+                        max: SPATIAL_CONFIG.chartMaxYAxis, 
+                        grid: { color: '#F4F4F5' }, 
+                        ticks: { color: '#A1A1AA', font: { size: 9 } } 
+                    } 
                 }
             }
         });
 
-        // Simulates the naturally sparse telemetry of an open stadium area (ranging between 5 to 25 people)
         function fetchRawTarget() {
-            targetCount = Math.floor(5 + (Math.random() * 20));
+            const varianceRange = SPATIAL_CONFIG.maxSimulatedCount - SPATIAL_CONFIG.minSimulatedCount;
+            targetCount = Math.floor(SPATIAL_CONFIG.minSimulatedCount + (Math.random() * varianceRange));
         }
 
         function renderLoop() {
@@ -130,15 +166,17 @@
             let strokeColor = '#047857';
             let statusMessage = 'Optimal Flow';
 
-            // Stadium thresholds remain well within optimal limits due to low ambient usage
-            if (integerCount > 75) {
+            const alertThreshold = SPATIAL_CONFIG.maxSimulatedCount * 0.75;
+            const warningThreshold = SPATIAL_CONFIG.maxSimulatedCount * 0.45;
+
+            if (integerCount > alertThreshold) {
                 coreColor = '#EF4444'; strokeColor = '#B91C1C'; statusMessage = 'Critical Density';
-            } else if (integerCount > 45) {
+            } else if (integerCount > warningThreshold) {
                 coreColor = '#F59E0B'; strokeColor = '#B45309'; statusMessage = 'Approaching Limit';
             }
 
             spatialVectorGroup.clearLayers();
-            L.circle(targetAnchor, {
+            L.circle(SPATIAL_CONFIG.coordinates, {
                 radius: 15 + (integerCount * 0.4),
                 fillColor: coreColor,
                 fillOpacity: 0.25,
