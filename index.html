@@ -40,7 +40,7 @@
 
     <div class="panel">
         <h1>Autonomous Monitor</h1>
-        <div class="heading">Prasanthi Nilayam Hub</div>
+        <div class="heading">Hill View Stadium Hub</div>
         
         <div class="status-bar">
             <div id="ind" class="indicator"></div>
@@ -48,12 +48,12 @@
         </div>
 
         <div class="metric-card">
-            <div class="label">Sai Kulwant Hall Density</div>
+            <div class="label">Open Field Core Density</div>
             <div id="count" class="value">0</div>
         </div>
 
         <div class="chart-box">
-            <div class="chart-label">Raw Density Trend</div>
+            <div class="chart-label">Fluid Density Trend</div>
             <canvas id="liveChart"></canvas>
         </div>
     </div>
@@ -64,8 +64,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([14.1656, 77.8074], 16);
-        
+        // Set coordinates to Sri Sathya Sai Hill View Stadium, Puttaparthi
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([14.1622, 77.8139], 16);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
         L.tileLayer.wms('https://bhuvan-vec1.nrsc.gov.in/bhuvan/wms', {
@@ -75,8 +75,12 @@
             opacity: 0.5
         }).addTo(map);
 
-        const targetAnchor = [14.1656, 77.8074];
+        const targetAnchor = [14.1622, 77.8139];
         let spatialVectorGroup = L.layerGroup().addTo(map);
+
+        // Lower baseline trackers to represent a sparsely populated zone
+        let currentDisplayCount = 12;
+        let targetCount = 12;
 
         const ctx = document.getElementById('liveChart').getContext('2d');
         const timelineLimit = 25;
@@ -86,55 +90,63 @@
             data: {
                 labels: Array(timelineLimit).fill(''),
                 datasets: [{
-                    data: Array(timelineLimit).fill(0),
+                    data: Array(timelineLimit).fill(12),
                     borderColor: '#10B981',
                     borderWidth: 1.5,
                     pointRadius: 0,
-                    tension: 0, // Direct raw point linkage
+                    tension: 0.2,
                     fill: false
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: false, // Pure real-time raw data frame updates
+                animation: { duration: 0 },
                 plugins: { legend: { display: false } },
                 scales: { 
                     x: { display: false }, 
-                    y: { 
-                        min: 0,
-                        max: 900,
-                        grid: { color: '#F4F4F5' }, 
-                        ticks: { color: '#A1A1AA', font: { size: 9 } } 
-                    } 
+                    y: { min: 0, max: 100, grid: { color: '#F4F4F5' }, ticks: { color: '#A1A1AA', font: { size: 9 } } } 
                 }
             }
         });
 
-        function computeState() {
-            // Returns pure, rounded raw telemetry without signal processing or mathematical smoothing
-            const rawMetrics = Math.floor(100 + (Math.random() * 700));
+        // Simulates the naturally sparse telemetry of an open stadium area (ranging between 5 to 25 people)
+        function fetchRawTarget() {
+            targetCount = Math.floor(5 + (Math.random() * 20));
+        }
+
+        function renderLoop() {
+            const delta = targetCount - currentDisplayCount;
             
+            if (Math.abs(delta) > 0.1) {
+                currentDisplayCount += delta * 0.05;
+            } else {
+                currentDisplayCount = targetCount;
+            }
+
+            const integerCount = Math.round(currentDisplayCount);
+
             let coreColor = '#10B981';
             let strokeColor = '#047857';
             let statusMessage = 'Optimal Flow';
 
-            if (rawMetrics > 550) {
+            // Stadium thresholds remain well within optimal limits due to low ambient usage
+            if (integerCount > 75) {
                 coreColor = '#EF4444'; strokeColor = '#B91C1C'; statusMessage = 'Critical Density';
-            } else if (rawMetrics > 320) {
+            } else if (integerCount > 45) {
                 coreColor = '#F59E0B'; strokeColor = '#B45309'; statusMessage = 'Approaching Limit';
             }
 
             spatialVectorGroup.clearLayers();
             L.circle(targetAnchor, {
-                radius: 40 + (rawMetrics * 0.15),
+                radius: 15 + (integerCount * 0.4),
                 fillColor: coreColor,
                 fillOpacity: 0.25,
                 color: strokeColor,
                 weight: 1
             }).addTo(spatialVectorGroup);
 
-            document.getElementById('count').innerText = rawMetrics;
+            document.getElementById('count').innerText = integerCount;
             const textEl = document.getElementById('ind-text');
             const dotEl = document.getElementById('ind');
             
@@ -142,14 +154,17 @@
             textEl.style.color = coreColor;
             dotEl.style.background = coreColor;
 
-            liveChart.data.datasets[0].data.push(rawMetrics);
+            liveChart.data.datasets[0].data.push(integerCount);
             liveChart.data.datasets[0].data.shift();
             liveChart.data.datasets[0].borderColor = coreColor;
             liveChart.update();
+
+            requestAnimationFrame(renderLoop);
         }
 
-        computeState();
-        setInterval(computeState, 1000);
+        fetchRawTarget();
+        renderLoop();
+        setInterval(fetchRawTarget, 2500);
     </script>
 </body>
 </html>
